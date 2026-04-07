@@ -27,6 +27,7 @@ class ReaderAgent:
     def __init__(self):
         self._stop_event   = threading.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._async_stop:  Optional[asyncio.Event] = None   # created inside the loop's thread
 
         # Callbacks set by the tray
         self.on_connected:    Callable[[], None] = lambda: None
@@ -39,18 +40,22 @@ class ReaderAgent:
 
     def start(self) -> None:
         """Start the WebSocket loop in a daemon thread."""
-        t = threading.Thread(target=self._run_loop, daemon=True, name="ws-agent")
-        t.start()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="ws-agent")
+        self._thread.start()
 
     def stop(self) -> None:
         self._stop_event.set()
-        if self._loop:
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop and self._async_stop:
+            # Signal the asyncio sleep to wake up and exit cleanly
+            self._loop.call_soon_threadsafe(self._async_stop.set)
 
     def restart(self) -> None:
-        """Restart after config change."""
+        """Restart after config change (e.g. settings saved)."""
         self.stop()
+        if hasattr(self, "_thread"):
+            self._thread.join(timeout=5)  # wait for old thread to finish
         self._stop_event.clear()
+        self._async_stop = None  # will be recreated in new thread
         self.start()
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -58,10 +63,30 @@ class ReaderAgent:
     def _run_loop(self) -> None:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
+        # Must be created inside the loop's thread
+        self._async_stop = asyncio.Event()
         try:
             self._loop.run_until_complete(self._connect_loop())
+        except Exception:
+            pass
         finally:
-            self._loop.close()
+            try:
+                # Cancel any remaining tasks before closing
+                pending = asyncio.all_tasks(self._loop)
+                if pending:
+                    self._loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True)
+                    )
+                self._loop.close()
+            except Exception:
+                pass
+
+    async def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep for `seconds` but wake up immediately if stop() is called."""
+        try:
+            await asyncio.wait_for(self._async_stop.wait(), timeout=seconds)
+        except asyncio.TimeoutError:
+            pass
 
     async def _connect_loop(self) -> None:
         attempt = 0
@@ -73,7 +98,7 @@ class ReaderAgent:
             if not api_key or not server_url:
                 logger.warning("Not configured — waiting 10 s")
                 self.on_error("Not configured. Open Settings to add your API key.")
-                await asyncio.sleep(10)
+                await self._interruptible_sleep(10)
                 continue
 
             url = f"{server_url}?api_key={api_key}"
@@ -92,7 +117,7 @@ class ReaderAgent:
                 msg = str(exc)
                 if "4001" in msg:
                     self.on_error("Authentication failed. Check your API key in Settings.")
-                    await asyncio.sleep(30)
+                    await self._interruptible_sleep(30)
                     continue
                 self.on_error(f"Connection refused: {exc}")
             except (ConnectionClosedError, OSError) as exc:
@@ -107,7 +132,7 @@ class ReaderAgent:
             self.on_disconnected()
             delay = _BACKOFF[min(attempt, len(_BACKOFF) - 1)]
             logger.info("Reconnecting in %d s (attempt %d)…", delay, attempt + 1)
-            await asyncio.sleep(delay)
+            await self._interruptible_sleep(delay)
             attempt += 1
 
     async def _message_loop(self, ws) -> None:

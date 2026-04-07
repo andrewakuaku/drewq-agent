@@ -16,15 +16,16 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-from setup_dialog import open_first_run, open_settings
+from setup_dialog import open_settings
+import config as cfg
 from ws_client import ReaderAgent
 from tray import TrayApp
 
 
 def main():
-    # ── First-run setup ───────────────────────────────────────────────────────
-    if not open_first_run():
-        # User closed the setup dialog without saving — exit silently
+    # ── Setup dialog — always shown on launch ────────────────────────────────
+    open_settings()
+    if not cfg.is_configured():
         return
 
     # ── Start WebSocket agent ─────────────────────────────────────────────────
