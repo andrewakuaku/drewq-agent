@@ -8,15 +8,33 @@ It runs on the machine where the reader is physically plugged in, reads ECOWAS b
 
 ## How it works
 
-```
-USB Reader → Agent (local machine) → WebSocket → DREWQ Backend → Dashboard
+```mermaid
+sequenceDiagram
+    participant R as USB Reader
+    participant A as Agent (your machine)
+    participant B as DREWQ Backend
+    participant D as Dashboard
+
+    A->>B: WebSocket connect (API key auth)
+
+    R-->>A: Card inserted (PC/SC event)
+    A->>B: card_present: true
+    B->>D: SSE → badge updates
+
+    D->>B: Scan Card clicked
+    B->>A: WebSocket: scan command
+    A->>R: BAC auth + read chip
+    R-->>A: DG1 (MRZ), DG2 (photo), DG11 (ID)
+    A->>B: scan_result
+    B->>D: Citizen profile displayed
 ```
 
 1. You plug in a supported USB smart card reader
 2. The agent detects the reader via PC/SC (no drivers needed on modern OS)
-3. When you press **Scan Card** in the dashboard, the backend sends a scan command over WebSocket to the agent
-4. The agent reads the card chip using BAC (Basic Access Control) and returns the data
-5. The backend stores the record and your dashboard updates in real time
+3. Card insertions and removals are detected in real time and pushed to the dashboard
+4. When you press **Scan Card** in the dashboard, the backend sends a scan command over WebSocket to the agent
+5. The agent reads the card chip using BAC (Basic Access Control) and returns the data
+6. The backend stores the record and your dashboard updates in real time
 
 ---
 
