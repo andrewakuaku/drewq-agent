@@ -1,5 +1,5 @@
 """
-System tray (macOS status bar) using rumps.
+System tray for macOS using rumps.
 Supports: Connected / Scanning / Disconnected / Error states.
 """
 
@@ -30,7 +30,6 @@ class TrayApp(rumps.App):
             rumps.MenuItem("Quit",           callback=self._quit_clicked),
         ]
 
-        # Wire agent callbacks
         agent.on_connected    = self._on_connected
         agent.on_disconnected = self._on_disconnected
         agent.on_scanning     = self._on_scanning
@@ -69,7 +68,6 @@ class TrayApp(rumps.App):
     def _set_state(self, state: str, text: str):
         with self._lock:
             self._state = state
-        # rumps must be updated from main thread
         rumps.Timer(self._do_update, 0).start()
         self._pending = (state, text)
 

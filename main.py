@@ -16,10 +16,15 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-from setup_dialog import open_settings
 import config as cfg
 from ws_client import ReaderAgent
-from tray import TrayApp
+
+if sys.platform == "darwin":
+    from setup_dialog import open_settings
+    from tray_mac import TrayApp
+else:
+    from setup_dialog_win import open_settings
+    from tray_win import TrayApp
 
 
 def main():
