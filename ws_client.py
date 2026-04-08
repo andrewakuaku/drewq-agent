@@ -152,7 +152,7 @@ class ReaderAgent:
                 }))
             except Exception:
                 break
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
 
     async def _message_loop(self, ws) -> None:
         status_task = asyncio.create_task(self._send_status(ws))

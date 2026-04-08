@@ -578,15 +578,33 @@ def list_readers() -> list[str]:
 
 
 def check_card_present() -> bool:
-    """Return True if a card is currently seated in any connected reader."""
+    """
+    Return True if a card is seated in any connected reader.
+
+    Uses SCardGetStatusChange with a zero timeout so it never blocks and
+    never establishes a card connection — avoids disturbing the PC/SC
+    subsystem and prevents false "no card" signals from connect/disconnect
+    cycles.
+    """
     try:
-        from smartcard.System import readers as get_readers
-        available = get_readers()
-        if not available:
+        from smartcard.scard import (
+            SCardEstablishContext, SCardReleaseContext, SCardListReaders,
+            SCardGetStatusChange, SCARD_SCOPE_USER,
+            SCARD_STATE_PRESENT, SCARD_STATE_UNAWARE,
+        )
+        hresult, hcontext = SCardEstablishContext(SCARD_SCOPE_USER)
+        if hresult != 0:
             return False
-        conn = available[0].createConnection()
-        conn.connect()
-        conn.disconnect()
-        return True
+        try:
+            hresult, readers = SCardListReaders(hcontext, [])
+            if hresult != 0 or not readers:
+                return False
+            reader_states = [(r, SCARD_STATE_UNAWARE) for r in readers]
+            hresult, new_states = SCardGetStatusChange(hcontext, 0, reader_states)
+            if hresult != 0:
+                return False
+            return any(state & SCARD_STATE_PRESENT for _, state, *_ in new_states)
+        finally:
+            SCardReleaseContext(hcontext)
     except Exception:
         return False
