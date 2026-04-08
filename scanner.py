@@ -628,11 +628,15 @@ class CardPresenceMonitor:
             logger.warning("pyscard not available — card monitoring disabled")
             return
 
-        # SCARD_INFINITE (0xFFFFFFFF) may not be exported on all pyscard builds
+        # SCARD_E_TIMEOUT is returned when no state change occurred within the timeout
         try:
-            from smartcard.scard import SCARD_INFINITE
+            from smartcard.scard import SCARD_E_TIMEOUT
         except ImportError:
-            SCARD_INFINITE = 0xFFFFFFFF
+            SCARD_E_TIMEOUT = 0x8010000A  # standard PCSC value on all platforms
+
+        # macOS PCSC crashes pyscard's C extension with SCARD_INFINITE (0xFFFFFFFF).
+        # Use 5-second chunks instead: event-driven with ≤5s detection latency.
+        POLL_MS = 5_000
 
         hresult, hcontext = SCardEstablishContext(SCARD_SCOPE_USER)
         if hresult != 0:
@@ -662,14 +666,16 @@ class CardPresenceMonitor:
             states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
 
             while self._running:
-                hresult, states = SCardGetStatusChange(hcontext, SCARD_INFINITE, states)
+                hresult, new_states = SCardGetStatusChange(hcontext, POLL_MS, states)
+                if hresult == SCARD_E_TIMEOUT:
+                    continue  # no change — loop and wait again
                 if hresult != 0:
-                    # Cancelled (stop() called) or error — exit cleanly
-                    break
-                present = any(s & SCARD_STATE_PRESENT for _, s, *_ in states)
+                    break  # SCardCancel called or fatal error — exit cleanly
+                # State actually changed
+                present = any(s & SCARD_STATE_PRESENT for _, s, *_ in new_states)
                 logger.info("Card state changed: card_present=%s", present)
                 self._callback(present)
-                states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
+                states = [(r, s & ~self._CHANGED) for r, s, *_ in new_states]
 
         except Exception as exc:
             logger.warning("Card monitor error: %s", exc)
