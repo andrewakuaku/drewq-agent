@@ -14,7 +14,7 @@ from typing import Callable, Optional
 import websockets
 from websockets.exceptions import ConnectionClosedError, InvalidHandshake
 
-from scanner import read_card
+from scanner import read_card, check_card_present, list_readers
 import config as cfg
 
 logger = logging.getLogger(__name__)
@@ -135,20 +135,43 @@ class ReaderAgent:
             await self._interruptible_sleep(delay)
             attempt += 1
 
-    async def _message_loop(self, ws) -> None:
-        async for raw in ws:
+    async def _send_status(self, ws) -> None:
+        """Periodically report card presence to the backend."""
+        while True:
             try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+                card_present = await asyncio.get_running_loop().run_in_executor(
+                    None, check_card_present
+                )
+                readers = await asyncio.get_running_loop().run_in_executor(
+                    None, list_readers
+                )
+                await ws.send(json.dumps({
+                    "type": "status",
+                    "readers": readers,
+                    "card_present": card_present,
+                }))
+            except Exception:
+                break
+            await asyncio.sleep(2)
 
-            msg_type = msg.get("type")
+    async def _message_loop(self, ws) -> None:
+        status_task = asyncio.create_task(self._send_status(ws))
+        try:
+            async for raw in ws:
+                try:
+                    msg = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
 
-            if msg_type == "scan":
-                await self._handle_scan(ws, msg)
+                msg_type = msg.get("type")
 
-            elif msg_type == "pong":
-                pass  # heartbeat acknowledged
+                if msg_type == "scan":
+                    await self._handle_scan(ws, msg)
+
+                elif msg_type == "pong":
+                    pass  # heartbeat acknowledged
+        finally:
+            status_task.cancel()
 
     async def _handle_scan(self, ws, msg: dict) -> None:
         cmd_id       = msg.get("id", "")

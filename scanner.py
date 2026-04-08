@@ -575,3 +575,18 @@ def list_readers() -> list[str]:
         return [str(r) for r in get_readers()]
     except Exception:
         return []
+
+
+def check_card_present() -> bool:
+    """Return True if a card is currently seated in any connected reader."""
+    try:
+        from smartcard.System import readers as get_readers
+        available = get_readers()
+        if not available:
+            return False
+        conn = available[0].createConnection()
+        conn.connect()
+        conn.disconnect()
+        return True
+    except Exception:
+        return False
