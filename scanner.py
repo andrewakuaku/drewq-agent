@@ -12,8 +12,9 @@ import hashlib
 import logging
 import os
 import struct
+import threading
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Callable, Optional
 
 from Crypto.Cipher import DES, DES3
 
@@ -577,34 +578,100 @@ def list_readers() -> list[str]:
         return []
 
 
-def check_card_present() -> bool:
+class CardPresenceMonitor:
     """
-    Return True if a card is seated in any connected reader.
+    Event-driven card presence monitor using SCardGetStatusChange(INFINITE).
 
-    Uses SCardGetStatusChange with a zero timeout so it never blocks and
-    never establishes a card connection — avoids disturbing the PC/SC
-    subsystem and prevents false "no card" signals from connect/disconnect
-    cycles.
+    Blocks in the PC/SC subsystem until a card is actually inserted or removed,
+    then fires the callback immediately. This eliminates polling gaps and false
+    negatives — the badge reflects reality within ~100 ms of any state change.
+
+    Usage:
+        monitor = CardPresenceMonitor(lambda present: ...)
+        monitor.start()
+        # ... later ...
+        monitor.stop()
     """
-    try:
-        from smartcard.scard import (
-            SCardEstablishContext, SCardReleaseContext, SCardListReaders,
-            SCardGetStatusChange, SCARD_SCOPE_USER,
-            SCARD_STATE_PRESENT, SCARD_STATE_UNAWARE,
-        )
+
+    # SCARD_STATE_CHANGED bit — strip before passing back as known state
+    _CHANGED = 0x0002
+
+    def __init__(self, callback: Callable[[bool], None]) -> None:
+        self._callback = callback
+        self._hcontext = None
+        self._running = False
+        self._lock = threading.Lock()
+
+    def start(self) -> None:
+        self._running = True
+        t = threading.Thread(target=self._run, daemon=True, name="card-monitor")
+        t.start()
+
+    def stop(self) -> None:
+        self._running = False
+        with self._lock:
+            if self._hcontext is not None:
+                try:
+                    from smartcard.scard import SCardCancel
+                    SCardCancel(self._hcontext)
+                except Exception:
+                    pass
+
+    def _run(self) -> None:
+        try:
+            from smartcard.scard import (
+                SCardEstablishContext, SCardReleaseContext, SCardListReaders,
+                SCardGetStatusChange, SCARD_SCOPE_USER,
+                SCARD_STATE_PRESENT, SCARD_STATE_UNAWARE, SCARD_INFINITE,
+            )
+        except ImportError:
+            logger.warning("pyscard not available — card monitoring disabled")
+            return
+
         hresult, hcontext = SCardEstablishContext(SCARD_SCOPE_USER)
         if hresult != 0:
-            return False
+            logger.warning("SCardEstablishContext failed: %d", hresult)
+            return
+
+        with self._lock:
+            self._hcontext = hcontext
+
         try:
             hresult, readers = SCardListReaders(hcontext, [])
             if hresult != 0 or not readers:
-                return False
-            reader_states = [(r, SCARD_STATE_UNAWARE) for r in readers]
-            hresult, new_states = SCardGetStatusChange(hcontext, 0, reader_states)
+                logger.warning("No readers found for card monitoring")
+                return
+
+            # Snapshot current state (non-blocking)
+            states = [(r, SCARD_STATE_UNAWARE) for r in readers]
+            hresult, states = SCardGetStatusChange(hcontext, 0, states)
             if hresult != 0:
-                return False
-            return any(state & SCARD_STATE_PRESENT for _, state, *_ in new_states)
+                return
+
+            present = any(s & SCARD_STATE_PRESENT for _, s, *_ in states)
+            self._callback(present)
+            logger.info("Card monitor started — initial state: card_present=%s", present)
+
+            # Strip CHANGED so the next call blocks until a real change occurs
+            states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
+
+            while self._running:
+                hresult, states = SCardGetStatusChange(hcontext, SCARD_INFINITE, states)
+                if hresult != 0:
+                    # Cancelled (stop() called) or error — exit cleanly
+                    break
+                present = any(s & SCARD_STATE_PRESENT for _, s, *_ in states)
+                logger.info("Card state changed: card_present=%s", present)
+                self._callback(present)
+                states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
+
+        except Exception as exc:
+            logger.warning("Card monitor error: %s", exc)
         finally:
-            SCardReleaseContext(hcontext)
-    except Exception:
-        return False
+            with self._lock:
+                self._hcontext = None
+            try:
+                SCardReleaseContext(hcontext)
+            except Exception:
+                pass
+            logger.info("Card monitor stopped")
