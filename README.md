@@ -1,6 +1,6 @@
 # DREWQ Reader Agent
 
-The local agent that connects your USB smart card reader to your [DREWQ](https://drewq-app-9af671f9e6d5.herokuapp.com) dashboard.
+The local agent that connects your USB smart card reader to your [DREWQ](https://drewq.com) dashboard.
 
 It runs on the machine where the reader is physically plugged in, reads ECOWAS biometric identity cards, and relays scan results to the DREWQ backend over a secure connection.
 
@@ -42,8 +42,8 @@ sequenceDiagram
 
 - **Python 3.11+**
 - **macOS** (Ventura or later) or **Windows 10/11 (64-bit)**
-- A [supported USB smart card reader](https://drewq-app-9af671f9e6d5.herokuapp.com/readers)
-- A DREWQ API key (get one from your [dashboard](https://drewq-app-9af671f9e6d5.herokuapp.com))
+- A [supported USB smart card reader](https://drewq.com/readers)
+- A DREWQ API key (get one from your [dashboard](https://drewq.com))
 
 ### Smart card service
 
@@ -79,7 +79,7 @@ Settings are stored at `~/.drewq/config.json`:
 ```json
 {
   "api_key": "drewq_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "server_url": "https://drewq-api-5df4dc0a4153.herokuapp.com"
+  "server_url": "https://api.drewq.com"
 }
 ```
 
@@ -110,7 +110,7 @@ Right-click the tray icon for **Settings** and **Quit**.
 
 Any USB smart card reader that supports the CCID protocol and ISO 7816 is compatible. The agent detects readers automatically — no configuration needed.
 
-See the full list at [drewq.app/readers](https://drewq-app-9af671f9e6d5.herokuapp.com/readers).
+See the full list at [drewq.com/readers](https://drewq.com/readers).
 
 ---
 

@@ -10,7 +10,7 @@ _CONFIG_FILE = _CONFIG_DIR / "config.json"
 
 DEFAULTS = {
     "api_key":    "",
-    "server_url": "wss://drewq-api-5df4dc0a4153.herokuapp.com/ws/reader",
+    "server_url": "wss://api.drewq.com/ws/reader",
 }
 
 
