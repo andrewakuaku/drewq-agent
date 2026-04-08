@@ -135,23 +135,45 @@ class ReaderAgent:
             await self._interruptible_sleep(delay)
             attempt += 1
 
+    async def _heartbeat(self, ws, state: dict) -> None:
+        """
+        Resend the current card state every 20 s.
+
+        The backend holds a "card present" flag that resets when the WebSocket
+        drops. Sending a periodic keepalive ensures the backend's holdoff timer
+        stays fresh even if the card state hasn't changed, so brief Heroku
+        routing drops don't flip the dashboard badge.
+        """
+        while True:
+            await asyncio.sleep(20)
+            try:
+                await ws.send(json.dumps({
+                    "type": "status",
+                    "card_present": state["present"],
+                    "readers": list_readers(),
+                }))
+            except Exception:
+                break
+
     async def _message_loop(self, ws) -> None:
         loop = asyncio.get_running_loop()
+        state = {"present": False}  # shared between monitor thread and heartbeat coroutine
 
         def _on_card_change(card_present: bool) -> None:
-            """Called from the card-monitor thread on every state change."""
-            readers = list_readers()
+            """Called from the card-monitor thread on every real state change."""
+            state["present"] = card_present
             asyncio.run_coroutine_threadsafe(
                 ws.send(json.dumps({
                     "type": "status",
                     "card_present": card_present,
-                    "readers": readers,
+                    "readers": list_readers(),
                 })),
                 loop,
             )
 
         monitor = CardPresenceMonitor(_on_card_change)
         monitor.start()
+        heartbeat = asyncio.create_task(self._heartbeat(ws, state))
         try:
             async for raw in ws:
                 try:
@@ -167,6 +189,7 @@ class ReaderAgent:
                 elif msg_type == "pong":
                     pass  # heartbeat acknowledged
         finally:
+            heartbeat.cancel()
             monitor.stop()
 
     async def _handle_scan(self, ws, msg: dict) -> None:

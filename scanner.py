@@ -671,10 +671,13 @@ class CardPresenceMonitor:
                     continue  # no change — loop and wait again
                 if hresult != 0:
                     break  # SCardCancel called or fatal error — exit cleanly
-                # State actually changed
-                present = any(s & SCARD_STATE_PRESENT for _, s, *_ in new_states)
-                logger.info("Card state changed: card_present=%s", present)
-                self._callback(present)
+                # Only fire callback when the presence bit actually changes
+                # (ignores non-presence bits like SCARD_STATE_INUSE / EXCLUSIVE)
+                new_present = any(s & SCARD_STATE_PRESENT for _, s, *_ in new_states)
+                if new_present != present:
+                    present = new_present
+                    logger.info("Card state changed: card_present=%s", present)
+                    self._callback(present)
                 states = [(r, s & ~self._CHANGED) for r, s, *_ in new_states]
 
         except Exception as exc:
