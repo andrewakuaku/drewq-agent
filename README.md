@@ -2,7 +2,7 @@
 
 The local agent that connects your USB smart card reader to your [DREWQ](https://drewq-app-9af671f9e6d5.herokuapp.com) dashboard.
 
-It runs on the machine where the reader is physically plugged in, reads ECOWAS biometric identity cards via the PC/SC interface, and relays scan results to the DREWQ backend over a secure WebSocket connection.
+It runs on the machine where the reader is physically plugged in, reads ECOWAS biometric identity cards, and relays scan results to the DREWQ backend over a secure connection.
 
 ---
 
@@ -15,25 +15,25 @@ sequenceDiagram
     participant B as DREWQ Backend
     participant D as Dashboard
 
-    A->>B: WebSocket connect (API key auth)
+    A->>B: Connect (API key auth)
 
-    R-->>A: Card inserted (PC/SC event)
+    R-->>A: Card inserted
     A->>B: card_present: true
-    B->>D: SSE → badge updates
+    B->>D: Badge updates
 
     D->>B: Scan Card clicked
-    B->>A: WebSocket: scan command
-    A->>R: BAC auth + read chip
-    R-->>A: DG1 (MRZ), DG2 (photo), DG11 (ID)
-    A->>B: scan_result
+    B->>A: Scan command
+    A->>R: Authenticate + read chip
+    R-->>A: Identity data
+    A->>B: Scan result
     B->>D: Citizen profile displayed
 ```
 
 1. You plug in a supported USB smart card reader
-2. The agent detects the reader via PC/SC (no drivers needed on modern OS)
+2. The agent detects the reader automatically (no drivers needed on modern OS)
 3. Card insertions and removals are detected in real time and pushed to the dashboard
-4. When you press **Scan Card** in the dashboard, the backend sends a scan command over WebSocket to the agent
-5. The agent reads the card chip using BAC (Basic Access Control) and returns the data
+4. When you press **Scan Card** in the dashboard, the backend sends a scan command to the agent
+5. The agent authenticates with the card and reads the identity data from the chip
 6. The backend stores the record and your dashboard updates in real time
 
 ---
@@ -45,7 +45,7 @@ sequenceDiagram
 - A [supported USB smart card reader](https://drewq-app-9af671f9e6d5.herokuapp.com/readers)
 - A DREWQ API key (get one from your [dashboard](https://drewq-app-9af671f9e6d5.herokuapp.com))
 
-### PC/SC daemon
+### Smart card service
 
 | Platform | Required |
 |----------|----------|
@@ -79,14 +79,14 @@ Settings are stored at `~/.drewq/config.json`:
 ```json
 {
   "api_key": "drewq_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "server_url": "wss://drewq-api-5df4dc0a4153.herokuapp.com/ws/reader"
+  "server_url": "https://drewq-api-5df4dc0a4153.herokuapp.com"
 }
 ```
 
 | Field | Description |
 |-------|-------------|
 | `api_key` | Your DREWQ API key — found in the dashboard under **API Keys** |
-| `server_url` | WebSocket URL of the DREWQ backend — defaults to the production server |
+| `server_url` | URL of the DREWQ backend — defaults to the production server |
 
 You can also open the settings dialog at any time from the system tray icon.
 
@@ -108,26 +108,9 @@ Right-click the tray icon for **Settings** and **Quit**.
 
 ## Supported readers
 
-Any USB smart card reader that supports the CCID protocol and ISO 7816 is compatible. The agent detects readers automatically via PC/SC — no configuration needed.
+Any USB smart card reader that supports the CCID protocol and ISO 7816 is compatible. The agent detects readers automatically — no configuration needed.
 
 See the full list at [drewq.app/readers](https://drewq-app-9af671f9e6d5.herokuapp.com/readers).
-
----
-
-## Project structure
-
-```
-agent/
-├── main.py              # Entry point — startup sequence and tray launch
-├── ws_client.py         # WebSocket client, reconnect loop, scan relay
-├── scanner.py           # PC/SC card reading, BAC, MRZ/chip data parsing
-├── config.py            # Config persistence (~/.drewq/config.json)
-├── setup_dialog.py      # macOS settings dialog (rumps)
-├── setup_dialog_win.py  # Windows settings dialog (tkinter)
-├── tray_mac.py          # macOS system tray (rumps)
-├── tray_win.py          # Windows system tray (pystray)
-└── requirements.txt
-```
 
 ---
 
