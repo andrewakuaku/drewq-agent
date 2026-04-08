@@ -622,11 +622,17 @@ class CardPresenceMonitor:
             from smartcard.scard import (
                 SCardEstablishContext, SCardReleaseContext, SCardListReaders,
                 SCardGetStatusChange, SCARD_SCOPE_USER,
-                SCARD_STATE_PRESENT, SCARD_STATE_UNAWARE, SCARD_INFINITE,
+                SCARD_STATE_PRESENT, SCARD_STATE_UNAWARE,
             )
         except ImportError:
             logger.warning("pyscard not available — card monitoring disabled")
             return
+
+        # SCARD_INFINITE (0xFFFFFFFF) may not be exported on all pyscard builds
+        try:
+            from smartcard.scard import SCARD_INFINITE
+        except ImportError:
+            SCARD_INFINITE = 0xFFFFFFFF
 
         hresult, hcontext = SCardEstablishContext(SCARD_SCOPE_USER)
         if hresult != 0:
