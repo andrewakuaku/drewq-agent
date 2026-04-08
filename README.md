@@ -113,6 +113,21 @@ agent/
 
 ---
 
+## Updating
+
+When a new version of the agent is released, pull the latest changes and restart:
+
+```bash
+cd drewq-agent
+git pull origin main
+pip install -r requirements.txt
+python main.py
+```
+
+> **Tip:** Run `git pull` before launching the agent each time to stay on the latest version.
+
+---
+
 ## Troubleshooting
 
 **"No smart card readers found"**
