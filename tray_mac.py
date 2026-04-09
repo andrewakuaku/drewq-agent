@@ -3,6 +3,8 @@ System tray for macOS using rumps.
 Supports: Connected / Scanning / Disconnected / Error states.
 """
 
+import os
+import tempfile
 import threading
 from typing import Callable
 
@@ -11,9 +13,43 @@ import rumps
 import config as cfg
 
 
+def _make_state_icons() -> dict[str, str]:
+    """Generate coloured circle PNGs for each agent state. Returns state → file path."""
+    try:
+        from PIL import Image, ImageDraw
+        colors = {
+            "connected":    "#22c55e",
+            "disconnected": "#ef4444",
+            "scanning":     "#eab308",
+            "error":        "#ef4444",
+        }
+        size = 44  # 44 px → renders at 22 pt (retina-ready)
+        icons: dict[str, str] = {}
+        for state, color in colors.items():
+            img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.ellipse([2, 2, size - 2, size - 2], fill=color)
+            fd, path = tempfile.mkstemp(suffix=".png", prefix=f"drewq_{state}_")
+            os.close(fd)
+            img.save(path, "PNG")
+            icons[state] = path
+        return icons
+    except Exception:
+        return {}
+
+
+_STATE_ICONS = _make_state_icons()
+
+
 class TrayApp(rumps.App):
     def __init__(self, agent, on_settings: Callable[[], None]):
-        super().__init__(name="DREWQ Reader", title="⬤", quit_button=None)
+        initial_icon = _STATE_ICONS.get("disconnected")
+        super().__init__(
+            name="DREWQ Reader",
+            icon=initial_icon,
+            template=False,
+            quit_button=None,
+        )
         self._agent       = agent
         self._on_settings = on_settings
         self._lock        = threading.Lock()
@@ -58,13 +94,6 @@ class TrayApp(rumps.App):
 
     # ── State ─────────────────────────────────────────────────────────────────
 
-    _ICONS = {
-        "connected":    "🟢",
-        "disconnected": "🔴",
-        "scanning":     "🟡",
-        "error":        "🔴",
-    }
-
     def _set_state(self, state: str, text: str):
         with self._lock:
             self._state = state
@@ -73,7 +102,9 @@ class TrayApp(rumps.App):
 
     def _do_update(self, _timer):
         state, text = self._pending
-        self.title = self._ICONS.get(state, "⬤")
+        icon_path = _STATE_ICONS.get(state)
+        if icon_path:
+            self.icon = icon_path
         self.menu["Disconnected"].title = text
 
     # ── Menu actions ──────────────────────────────────────────────────────────
