@@ -114,7 +114,9 @@ class TrayApp(rumps.App):
         threading.Thread(target=self._on_settings, daemon=True).start()
 
     def _reset_clicked(self, _):
-        # rumps.alert must run on the main thread (called directly from menu callback)
+        threading.Thread(target=self._do_reset, daemon=True).start()
+
+    def _do_reset(self):
         response = rumps.alert(
             title="Reset Server URL",
             message="This will reset the server URL to the production default. Your API key will be kept.",
@@ -124,7 +126,7 @@ class TrayApp(rumps.App):
         if response:
             c = cfg.load()
             cfg.save({**c, "server_url": cfg.DEFAULTS["server_url"]})
-            threading.Thread(target=self._agent.restart, daemon=True).start()
+            self._agent.restart()
 
     def _quit_clicked(self, _):
         self._agent.stop()
