@@ -14,7 +14,7 @@ from typing import Callable, Optional
 import websockets
 from websockets.exceptions import ConnectionClosedError, InvalidHandshake
 
-from scanner import read_card, list_readers, CardPresenceMonitor
+from scanner import read_card, list_readers, get_card_atr, CardPresenceMonitor
 import config as cfg
 
 logger = logging.getLogger(__name__)
@@ -150,6 +150,7 @@ class ReaderAgent:
                 await ws.send(json.dumps({
                     "type": "status",
                     "card_present": state["present"],
+                    "atr": state["atr"],
                     "readers": list_readers(),
                 }))
             except Exception:
@@ -157,15 +158,18 @@ class ReaderAgent:
 
     async def _message_loop(self, ws) -> None:
         loop = asyncio.get_running_loop()
-        state = {"present": False}  # shared between monitor thread and heartbeat coroutine
+        state = {"present": False, "atr": None}  # shared between monitor thread and heartbeat
 
         def _on_card_change(card_present: bool) -> None:
             """Called from the card-monitor thread on every real state change."""
             state["present"] = card_present
+            atr = get_card_atr() if card_present else None
+            state["atr"] = atr
             asyncio.run_coroutine_threadsafe(
                 ws.send(json.dumps({
                     "type": "status",
                     "card_present": card_present,
+                    "atr": atr,
                     "readers": list_readers(),
                 })),
                 loop,
@@ -193,10 +197,11 @@ class ReaderAgent:
             monitor.stop()
 
     async def _handle_scan(self, ws, msg: dict) -> None:
-        cmd_id       = msg.get("id", "")
-        doc_number   = msg.get("doc_number", "")
+        cmd_id        = msg.get("id", "")
+        doc_number    = msg.get("doc_number", "")
         date_of_birth = msg.get("date_of_birth", "")
-        expiry_date  = msg.get("expiry_date", "")
+        expiry_date   = msg.get("expiry_date", "")
+        skip_photo    = bool(msg.get("skip_photo", False))
 
         self.on_scanning()
         try:
@@ -206,6 +211,7 @@ class ReaderAgent:
                     doc_number=doc_number,
                     date_of_birth=date_of_birth,
                     expiry_date=expiry_date,
+                    skip_photo=skip_photo,
                 ),
             )
             data = result.to_dict()

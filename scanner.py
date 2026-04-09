@@ -43,6 +43,7 @@ class ScanResult:
     mrz_line1: Optional[str] = None
     mrz_line2: Optional[str] = None
     photo_data: Optional[str] = None
+    atr: Optional[str] = None
     error: Optional[str] = None
 
     def to_dict(self) -> dict:
@@ -486,8 +487,32 @@ def _parse_dg11(raw: bytes) -> dict:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def get_card_atr(reader_name: Optional[str] = None) -> Optional[str]:
+    """Connect to the card and return its ATR as an uppercase hex string.
+    No BAC required — ATR is returned automatically on connection."""
+    try:
+        from smartcard.System import readers as get_readers
+        available = get_readers()
+        if not available:
+            return None
+        target = available[0]
+        if reader_name:
+            for r in available:
+                if reader_name.lower() in str(r).lower():
+                    target = r
+                    break
+        conn = target.createConnection()
+        conn.connect()
+        atr = bytes(conn.getATR()).hex().upper()
+        conn.disconnect()
+        return atr
+    except Exception:
+        return None
+
+
 def read_card(doc_number: str, date_of_birth: str, expiry_date: str,
-              reader_name: Optional[str] = None) -> ScanResult:
+              reader_name: Optional[str] = None,
+              skip_photo: bool = False) -> ScanResult:
     """Read a DREWQ ECOWAS card and return a ScanResult."""
     if not all([doc_number, date_of_birth, expiry_date]):
         return ScanResult(success=False, error="doc_number, date_of_birth, expiry_date are all required.")
@@ -512,6 +537,7 @@ def read_card(doc_number: str, date_of_birth: str, expiry_date: str,
     try:
         conn = target.createConnection()
         conn.connect()
+        atr = bytes(conn.getATR()).hex().upper()
     except Exception as exc:
         return ScanResult(success=False, error=f"No card detected: {exc}")
 
@@ -541,8 +567,8 @@ def read_card(doc_number: str, date_of_birth: str, expiry_date: str,
         chip["mrz_line2"] = lines[1]
         logger.info("DG1 parsed as %s", fmt)
 
-        # DG2 — Photo
-        if _sm_select(conn, sm, EF_DG2):
+        # DG2 — Photo (skip when only identifying, not registering)
+        if not skip_photo and _sm_select(conn, sm, EF_DG2):
             raw = _sm_read_file(conn, sm, max_bytes=40000)
             if raw:
                 photo = _parse_dg2_photo(raw)
@@ -558,7 +584,7 @@ def read_card(doc_number: str, date_of_birth: str, expiry_date: str,
         if not chip.get("personal_id_number"):
             return ScanResult(success=False, error="Personal ID number not found (DG11 tag 5F10 missing).")
 
-        return ScanResult(success=True, **chip)
+        return ScanResult(success=True, atr=atr, **chip)
 
     except Exception as exc:
         logger.exception("Unexpected error reading card")
