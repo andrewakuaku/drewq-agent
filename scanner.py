@@ -623,7 +623,7 @@ class CardPresenceMonitor:
     # SCARD_STATE_CHANGED bit — strip before passing back as known state
     _CHANGED = 0x0002
 
-    def __init__(self, callback: Callable[[bool, Optional[str]], None]) -> None:
+    def __init__(self, callback: Callable[[bool], None]) -> None:
         self._callback = callback
         self._hcontext = None
         self._running = False
@@ -679,16 +679,6 @@ class CardPresenceMonitor:
                 logger.warning("No readers found for card monitoring")
                 return
 
-            def _extract_atr(sts) -> Optional[str]:
-                """Pull ATR bytes from SCardGetStatusChange state tuples."""
-                for entry in sts:
-                    if len(entry) >= 3 and entry[2]:
-                        try:
-                            return bytes(entry[2]).hex().upper()
-                        except Exception:
-                            pass
-                return None
-
             # Snapshot current state (non-blocking)
             states = [(r, SCARD_STATE_UNAWARE) for r in readers]
             hresult, states = SCardGetStatusChange(hcontext, 0, states)
@@ -696,9 +686,8 @@ class CardPresenceMonitor:
                 return
 
             present = any(s & SCARD_STATE_PRESENT for _, s, *_ in states)
-            atr = _extract_atr(states) if present else None
-            logger.info("Card monitor started — initial state: card_present=%s atr=%s", present, atr)
-            self._callback(present, atr)
+            self._callback(present)
+            logger.info("Card monitor started — initial state: card_present=%s", present)
 
             # Strip CHANGED so the next call blocks until a real change occurs
             states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
@@ -714,9 +703,8 @@ class CardPresenceMonitor:
                 new_present = any(s & SCARD_STATE_PRESENT for _, s, *_ in new_states)
                 if new_present != present:
                     present = new_present
-                    atr = _extract_atr(new_states) if present else None
-                    logger.info("Card state changed: card_present=%s atr=%s", present, atr)
-                    self._callback(present, atr)
+                    logger.info("Card state changed: card_present=%s", present)
+                    self._callback(present)
                 states = [(r, s & ~self._CHANGED) for r, s, *_ in new_states]
 
         except Exception as exc:

@@ -14,7 +14,7 @@ from typing import Callable, Optional
 import websockets
 from websockets.exceptions import ConnectionClosedError, InvalidHandshake
 
-from scanner import read_card, list_readers, CardPresenceMonitor
+from scanner import read_card, list_readers, get_card_atr, CardPresenceMonitor
 import config as cfg
 
 logger = logging.getLogger(__name__)
@@ -160,9 +160,10 @@ class ReaderAgent:
         loop = asyncio.get_running_loop()
         state = {"present": False, "atr": None}  # shared between monitor thread and heartbeat
 
-        def _on_card_change(card_present: bool, atr: Optional[str] = None) -> None:
+        def _on_card_change(card_present: bool) -> None:
             """Called from the card-monitor thread on every real state change."""
             state["present"] = card_present
+            atr = get_card_atr() if card_present else None
             state["atr"] = atr
             logger.info("Card change: present=%s atr=%s", card_present, atr)
             asyncio.run_coroutine_threadsafe(
