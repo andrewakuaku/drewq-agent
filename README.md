@@ -19,22 +19,22 @@ sequenceDiagram
 
     R-->>A: Card inserted
     A->>B: card_present: true
-    B->>D: Badge updates
+    B->>D: Badge updates to "Card detected"
 
-    D->>B: Scan Card clicked
-    B->>A: Scan command
-    A->>R: Authenticate + read chip
+    D->>B: Verify button clicked
+    B->>A: Identify command (stored BAC credentials)
+    A->>R: Authenticate + read chip (BAC)
     R-->>A: Identity data
     A->>B: Scan result
-    B->>D: Citizen profile displayed
+    B->>D: Citizen profile displayed (SSE broadcast)
 ```
 
 1. You plug in a supported USB smart card reader
 2. The agent detects the reader automatically (no drivers needed on modern OS)
-3. Card insertions and removals are detected in real time and pushed to the dashboard
-4. When you press **Scan Card** in the dashboard, the backend sends a scan command to the agent
-5. The agent authenticates with the card and reads the identity data from the chip
-6. The backend stores the record and your dashboard updates in real time
+3. Card insertions and removals are detected in real time and pushed to the dashboard via SSE
+4. When you press **Verify** on the verification page, the backend sends an identify command to the agent using stored BAC credentials
+5. The agent authenticates with the card chip and reads the identity data
+6. The backend stores the record and broadcasts the result to all connected dashboard tabs in real time
 
 ---
 
@@ -98,11 +98,15 @@ Once running, the agent lives in the system tray (menu bar on macOS, taskbar on 
 
 | State | Icon |
 |-------|------|
-| Connected | Green indicator |
-| Scanning | Pulsing indicator |
-| Disconnected / error | Gray indicator |
+| Connected | Green circle |
+| Scanning | Yellow circle |
+| Disconnected / error | Red circle |
 
-Right-click the tray icon for **Settings** and **Quit**.
+Click the tray icon to open the menu. Select **Settings…** to update your API key or server URL, or **Quit** to stop the agent.
+
+### Settings dialog
+
+On macOS the settings dialog displays the app icon. Enter your API key and server URL when prompted.
 
 ---
 
