@@ -9,6 +9,8 @@ from typing import Callable
 import pystray
 from PIL import Image, ImageDraw
 
+import config as cfg
+
 
 def _make_icon(color: str) -> Image.Image:
     size = 64
@@ -42,6 +44,7 @@ class TrayApp:
                 pystray.MenuItem(lambda _: self._status_text, None, enabled=False),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Settings…", self._settings_clicked),
+                pystray.MenuItem("Reset…",    self._reset_clicked),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Quit", self._quit_clicked),
             ),
@@ -82,6 +85,24 @@ class TrayApp:
 
     def _settings_clicked(self, icon, item):
         threading.Thread(target=self._on_settings, daemon=True).start()
+
+    def _reset_clicked(self, icon, item):
+        threading.Thread(target=self._do_reset, daemon=True).start()
+
+    def _do_reset(self):
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        confirmed = messagebox.askyesno(
+            "Reset Server URL",
+            "This will reset the server URL to the production default.\nYour API key will be kept.",
+        )
+        root.destroy()
+        if confirmed:
+            c = cfg.load()
+            cfg.save({**c, "server_url": cfg.DEFAULTS["server_url"]})
+            self._agent.restart()
 
     def _quit_clicked(self, icon, item):
         self._agent.stop()

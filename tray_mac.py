@@ -62,6 +62,7 @@ class TrayApp(rumps.App):
             rumps.MenuItem("Disconnected",   callback=None),
             None,
             rumps.MenuItem("Settings…",      callback=self._settings_clicked),
+            rumps.MenuItem("Reset…",         callback=self._reset_clicked),
             None,
             rumps.MenuItem("Quit",           callback=self._quit_clicked),
         ]
@@ -111,6 +112,21 @@ class TrayApp(rumps.App):
 
     def _settings_clicked(self, _):
         threading.Thread(target=self._on_settings, daemon=True).start()
+
+    def _reset_clicked(self, _):
+        threading.Thread(target=self._do_reset, daemon=True).start()
+
+    def _do_reset(self):
+        response = rumps.alert(
+            title="Reset Server URL",
+            message="This will reset the server URL to the production default. Your API key will be kept.",
+            ok="Reset",
+            cancel="Cancel",
+        )
+        if response:
+            c = cfg.load()
+            cfg.save({**c, "server_url": cfg.DEFAULTS["server_url"]})
+            self._agent.restart()
 
     def _quit_clicked(self, _):
         self._agent.stop()
