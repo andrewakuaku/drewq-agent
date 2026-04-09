@@ -22,17 +22,17 @@ sequenceDiagram
     B->>D: Badge updates to "Card detected"
 
     D->>B: Verify button clicked
-    B->>A: Identify command (stored BAC credentials)
-    A->>R: Authenticate + read chip (BAC)
+    B->>A: Identify command
+    A->>R: Authenticate + read chip
     R-->>A: Identity data
     A->>B: Scan result
-    B->>D: Citizen profile displayed (SSE broadcast)
+    B->>D: Citizen profile displayed
 ```
 
 1. You plug in a supported USB smart card reader
 2. The agent detects the reader automatically (no drivers needed on modern OS)
-3. Card insertions and removals are detected in real time and pushed to the dashboard via SSE
-4. When you press **Verify** on the verification page, the backend sends an identify command to the agent using stored BAC credentials
+3. Card insertions and removals are detected in real time and pushed to the dashboard
+4. When you press **Verify** on the verification page, the backend sends an identify command to the agent using stored credentials
 5. The agent authenticates with the card chip and reads the identity data
 6. The backend stores the record and broadcasts the result to all connected dashboard tabs in real time
 
