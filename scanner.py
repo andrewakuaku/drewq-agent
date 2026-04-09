@@ -538,6 +538,7 @@ def read_card(doc_number: str, date_of_birth: str, expiry_date: str,
         conn = target.createConnection()
         conn.connect()
         atr = bytes(conn.getATR()).hex().upper()
+        logger.info("Card ATR: %s", atr)
     except Exception as exc:
         return ScanResult(success=False, error=f"No card detected: {exc}")
 
@@ -622,7 +623,7 @@ class CardPresenceMonitor:
     # SCARD_STATE_CHANGED bit — strip before passing back as known state
     _CHANGED = 0x0002
 
-    def __init__(self, callback: Callable[[bool], None]) -> None:
+    def __init__(self, callback: Callable[[bool, Optional[str]], None]) -> None:
         self._callback = callback
         self._hcontext = None
         self._running = False
@@ -678,6 +679,16 @@ class CardPresenceMonitor:
                 logger.warning("No readers found for card monitoring")
                 return
 
+            def _extract_atr(sts) -> Optional[str]:
+                """Pull ATR bytes from SCardGetStatusChange state tuples."""
+                for entry in sts:
+                    if len(entry) >= 3 and entry[2]:
+                        try:
+                            return bytes(entry[2]).hex().upper()
+                        except Exception:
+                            pass
+                return None
+
             # Snapshot current state (non-blocking)
             states = [(r, SCARD_STATE_UNAWARE) for r in readers]
             hresult, states = SCardGetStatusChange(hcontext, 0, states)
@@ -685,8 +696,9 @@ class CardPresenceMonitor:
                 return
 
             present = any(s & SCARD_STATE_PRESENT for _, s, *_ in states)
-            self._callback(present)
-            logger.info("Card monitor started — initial state: card_present=%s", present)
+            atr = _extract_atr(states) if present else None
+            logger.info("Card monitor started — initial state: card_present=%s atr=%s", present, atr)
+            self._callback(present, atr)
 
             # Strip CHANGED so the next call blocks until a real change occurs
             states = [(r, s & ~self._CHANGED) for r, s, *_ in states]
@@ -702,8 +714,9 @@ class CardPresenceMonitor:
                 new_present = any(s & SCARD_STATE_PRESENT for _, s, *_ in new_states)
                 if new_present != present:
                     present = new_present
-                    logger.info("Card state changed: card_present=%s", present)
-                    self._callback(present)
+                    atr = _extract_atr(new_states) if present else None
+                    logger.info("Card state changed: card_present=%s atr=%s", present, atr)
+                    self._callback(present, atr)
                 states = [(r, s & ~self._CHANGED) for r, s, *_ in new_states]
 
         except Exception as exc:
