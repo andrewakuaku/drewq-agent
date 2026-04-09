@@ -40,6 +40,7 @@ sequenceDiagram
 
 ## Requirements
 
+- **Python 3.11+**
 - **macOS** (Ventura or later) or **Windows 10/11 (64-bit)**
 - A [supported USB smart card reader](https://drewq.com/readers)
 - A DREWQ API key (get one from your [dashboard](https://drewq.com))
@@ -55,9 +56,17 @@ sequenceDiagram
 
 ## Installation
 
-1. Clone this repository
-2. Install the dependencies
-3. Launch the agent
+```bash
+# 1. Clone
+git clone https://github.com/andrewakuaku/drewq-agent.git
+cd drewq-agent
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run
+python main.py
+```
 
 A settings dialog will open on first launch. Enter your DREWQ API key and the agent will connect automatically.
 
@@ -111,13 +120,16 @@ See the full list at [drewq.com/readers](https://drewq.com/readers).
 
 ## Updating
 
-When a new version of the agent is released, pull the latest changes and relaunch:
+When a new version of the agent is released, pull the latest changes and restart:
 
 ```bash
+cd drewq-agent
 git pull origin main
+pip install -r requirements.txt
+python main.py
 ```
 
-> **Tip:** Pull the latest version before launching the agent each time to stay up to date.
+> **Tip:** Run `git pull` before launching the agent each time to stay on the latest version.
 
 ---
 
@@ -136,7 +148,7 @@ git pull origin main
 - Try removing and reinserting the card
 
 **Agent shows connected but scans fail**
-- Check the logs in your DREWQ dashboard
+- Check the backend logs in your Heroku dashboard
 - Ensure your API key has not been revoked
 
 ---
