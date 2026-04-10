@@ -66,12 +66,10 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
 
     url = _ask(
         "DREWQ Reader — Server URL",
-        "WebSocket server URL (leave blank to keep current):",
+        "WebSocket server URL\n(e.g. wss://api.drewq.com/ws/reader or ws://localhost:8000/ws/reader):",
     )
-    if url is None:
-        url = c.get("server_url", cfg.DEFAULTS["server_url"])
-    elif url == "":
-        url = c.get("server_url", cfg.DEFAULTS["server_url"])
+    if not url:
+        return  # cancelled or blank — don't save incomplete config
 
     cfg.save({"api_key": key, "server_url": url})
 

@@ -10,7 +10,7 @@ _CONFIG_FILE = _CONFIG_DIR / "config.json"
 
 DEFAULTS = {
     "api_key":    "",
-    "server_url": "wss://api.drewq.com/ws/reader",
+    "server_url": "",
 }
 
 
@@ -31,4 +31,4 @@ def save(cfg: dict) -> None:
 
 def is_configured() -> bool:
     cfg = load()
-    return bool(cfg.get("api_key"))
+    return bool(cfg.get("api_key")) and bool(cfg.get("server_url"))

@@ -68,7 +68,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-A settings dialog will open on first launch. Enter your DREWQ API key and the agent will connect automatically.
+A settings dialog will open on first launch. Enter your DREWQ API key and server URL — the agent will connect automatically.
 
 ---
 
@@ -79,14 +79,14 @@ Settings are stored at `~/.drewq/config.json`:
 ```json
 {
   "api_key": "drewq_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "server_url": "https://api.drewq.com"
+  "server_url": "wss://api.drewq.com/ws/reader"
 }
 ```
 
 | Field | Description |
 |-------|-------------|
 | `api_key` | Your DREWQ API key — found in the dashboard under **API Keys** |
-| `server_url` | URL of the DREWQ backend — defaults to the production server |
+| `server_url` | WebSocket URL of the DREWQ backend — use `wss://api.drewq.com/ws/reader` for production, or `ws://localhost:8000/ws/reader` for local development |
 
 You can also open the settings dialog at any time from the system tray icon.
 

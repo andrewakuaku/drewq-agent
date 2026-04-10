@@ -98,12 +98,10 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     # ── Server URL ────────────────────────────────────────────────────────────
     url = _ask(
         "DREWQ Reader — Server URL",
-        "WebSocket server URL (leave blank to keep current):",
+        "WebSocket server URL\\n(e.g. wss://api.drewq.com/ws/reader or ws://localhost:8000/ws/reader):",
     )
-    if url is None:
-        url = c.get("server_url", cfg.DEFAULTS["server_url"])
-    elif url == "":
-        url = c.get("server_url", cfg.DEFAULTS["server_url"])
+    if not url:
+        return  # cancelled or blank — don't save incomplete config
 
     cfg.save({"api_key": key, "server_url": url})
 
@@ -122,7 +120,8 @@ def open_first_run() -> bool:
             "To get started:\n\n"
             "1. Log in to your DREWQ dashboard\n"
             "2. Go to API Keys → Create a new key\n"
-            "3. Copy the key and paste it in the next screen"
+            "3. Paste your API key in the next screen\n"
+            "4. Enter your server URL (local or production)"
         ),
     )
     open_settings()
