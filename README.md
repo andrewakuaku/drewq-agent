@@ -31,10 +31,11 @@ sequenceDiagram
 
 1. You plug in a supported USB smart card reader
 2. The agent detects the reader automatically (no drivers needed on modern OS)
-3. Card insertions and removals are detected in real time and pushed to the dashboard
-4. When you press **Verify** on the verification page, the backend sends an identify command to the agent using stored credentials
-5. The agent authenticates with the card chip and reads the identity data
-6. The backend stores the record and broadcasts the result to all connected dashboard tabs in real time
+3. On connect the backend sends a `hello` message with your operator name — this appears in the tray menu
+4. Card insertions and removals are detected in real time and pushed to the dashboard
+5. When you press **Verify** on the verification page, the backend sends an identify command to the agent using stored credentials
+6. The agent authenticates with the card chip and reads the identity data
+7. The backend stores the record and broadcasts the result to all connected dashboard tabs in real time
 
 ---
 
@@ -99,14 +100,26 @@ Once running, the agent lives in the system tray (menu bar on macOS, taskbar on 
 | State | Icon |
 |-------|------|
 | Connected | Green circle |
-| Scanning | Yellow circle |
+| Scanning / reading card | Yellow circle |
 | Disconnected / error | Red circle |
 
-Click the tray icon to open the menu. Select **Settings…** to update your API key or server URL, or **Quit** to stop the agent.
+The tray menu shows the operator name (or organisation) returned by the backend on connect, the current connection status, and the name of the first detected USB reader.
+
+### Menu items
+
+| Item | Action |
+|------|--------|
+| **Open Dashboard** | Opens your DREWQ dashboard in the default browser (URL derived from the saved server URL) |
+| **Reconnect** | Forces an immediate reconnection attempt |
+| **Settings…** | Edit your API key and server URL — fields are pre-filled with the currently saved values |
+| **Reset…** | Resets the server URL to the production default; keeps your API key |
+| **Start at Login** | Toggle whether the agent starts automatically at login (checkmark reflects current state) |
+| **Copy API Key** | Copies the saved API key to the clipboard |
+| **Quit** | Stops the agent and removes the tray icon |
 
 ### Settings dialog
 
-On macOS the settings dialog displays the app icon. Enter your API key and server URL when prompted.
+On macOS the settings dialog uses native system prompts with the app icon. Fields are pre-filled with the currently saved API key and server URL so you only need to change what has updated.
 
 ---
 
