@@ -1,6 +1,5 @@
 """
-Settings dialog for Windows — tkinter input dialogs.
-Ctrl+V paste works natively in tkinter Entry widgets.
+Settings dialog for Windows using tkinter — auto-resize text input with Ctrl+V support.
 """
 
 import tkinter as tk
@@ -9,9 +8,10 @@ from typing import Callable, Optional
 import config as cfg
 
 
-def _ask(title: str, prompt: str) -> Optional[str]:
-    """Show a modal input dialog. Returns text or None if cancelled."""
+def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
+    """Show a modal input dialog with an auto-resizing text field."""
     result = [None]
+    cancelled = [False]
 
     root = tk.Tk()
     root.withdraw()
@@ -21,36 +21,65 @@ def _ask(title: str, prompt: str) -> Optional[str]:
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    w, h = 420, 140
-    x = (dialog.winfo_screenwidth() - w) // 2
-    y = (dialog.winfo_screenheight() - h) // 2
-    dialog.geometry(f"{w}x{h}+{x}+{y}")
+    w = 460
+    sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
 
-    tk.Label(dialog, text=prompt, wraplength=390, justify="left",
-             padx=16, pady=12).pack(fill="x")
+    tk.Label(
+        dialog, text=prompt, wraplength=428, justify="left",
+        padx=16, pady=12,
+    ).pack(fill="x")
 
-    entry = tk.Entry(dialog, width=50)
-    entry.pack(padx=16, pady=(0, 8))
-    entry.focus_set()
+    frame = tk.Frame(dialog, padx=16, pady=0)
+    frame.pack(fill="x")
 
-    def on_ok():
-        result[0] = entry.get()
+    txt = tk.Text(
+        frame, width=54, height=2, wrap="char",
+        font=("Consolas", 11), relief="solid", borderwidth=1,
+        padx=6, pady=6,
+    )
+    txt.pack(fill="x")
+
+    if default:
+        txt.insert("1.0", default)
+    txt.focus_set()
+    txt.mark_set("insert", "end")
+
+    def _resize(*_):
+        try:
+            lines = int(txt.tk.call(txt._w, "count", "-displaylines", "1.0", "end"))
+        except Exception:
+            lines = int(txt.index("end-1c").split(".")[0])
+        txt.configure(height=max(2, min(lines, 6)))
+        dialog.update_idletasks()
+        dialog.geometry(f"{w}x{dialog.winfo_reqheight()}+{(sw - w) // 2}+{(sh - dialog.winfo_reqheight()) // 2}")
+
+    txt.bind("<KeyRelease>", _resize)
+    _resize()
+
+    def on_ok(*_):
+        result[0] = txt.get("1.0", "end-1c").strip()
         dialog.destroy()
 
-    def on_cancel():
+    def on_cancel(*_):
+        cancelled[0] = True
         dialog.destroy()
+
+    txt.bind("<Return>",   lambda e: (on_ok(), "break")[1])
+    txt.bind("<KP_Enter>", lambda e: (on_ok(), "break")[1])
 
     btn_frame = tk.Frame(dialog)
-    btn_frame.pack(pady=(0, 12))
+    btn_frame.pack(pady=12)
     tk.Button(btn_frame, text="Cancel", width=10, command=on_cancel).pack(side="left", padx=6)
-    tk.Button(btn_frame, text="OK", width=10, command=on_ok, default="active").pack(side="left", padx=6)
+    tk.Button(btn_frame, text="OK",     width=10, command=on_ok, default="active").pack(side="left", padx=6)
 
-    dialog.bind("<Return>", lambda _: on_ok())
-    dialog.bind("<Escape>", lambda _: on_cancel())
+    dialog.bind("<Escape>", on_cancel)
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
 
     root.wait_window(dialog)
     root.destroy()
+
+    if cancelled[0]:
+        return None
     return result[0]
 
 
@@ -60,6 +89,7 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     key = _ask(
         "DREWQ Reader — Settings",
         "Paste your API key from the DREWQ dashboard\n(API Keys → Create new key):",
+        default=c.get("api_key", ""),
     )
     if key is None:
         return
@@ -67,6 +97,7 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     url = _ask(
         "DREWQ Reader — Server URL",
         "WebSocket server URL\n(e.g. wss://api.drewq.com/ws/reader or ws://localhost:8000/ws/reader):",
+        default=c.get("server_url", ""),
     )
     if not url:
         return  # cancelled or blank — don't save incomplete config
