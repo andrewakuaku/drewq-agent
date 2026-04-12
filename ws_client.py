@@ -35,6 +35,7 @@ class ReaderAgent:
         self.on_scanning:     Callable[[], None] = lambda: None
         self.on_scan_done:    Callable[[], None] = lambda: None
         self.on_error:        Callable[[str], None] = lambda _: None
+        self.on_hello:        Callable[[str, str], None] = lambda name, org: None
 
     # ── Public control ────────────────────────────────────────────────────────
 
@@ -183,7 +184,12 @@ class ReaderAgent:
 
                 msg_type = msg.get("type")
 
-                if msg_type == "scan":
+                if msg_type == "hello":
+                    name = msg.get("name", "")
+                    org  = msg.get("organisation", "")
+                    self.on_hello(name, org)
+
+                elif msg_type == "scan":
                     await self._handle_scan(ws, msg)
 
                 elif msg_type == "pong":

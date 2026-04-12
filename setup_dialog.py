@@ -58,13 +58,14 @@ def _build_dialog_icon() -> str | None:
         return None
 
 
-def _ask(title: str, prompt: str) -> Optional[str]:
+def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
     """Show a native macOS input dialog. Returns text or None if cancelled."""
     icns = _build_dialog_icon()
     icon_clause = f'with icon (POSIX file "{icns}")' if icns else "with icon note"
+    safe_default = default.replace('"', '\\"')
     script = (
         f'display dialog "{prompt}" '
-        f'default answer "" '
+        f'default answer "{safe_default}" '
         f'{icon_clause} '
         f'buttons {{"Cancel", "OK"}} '
         f'default button "OK" '
@@ -91,6 +92,7 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     key = _ask(
         "DREWQ Reader — Settings",
         "Paste your API key from the DREWQ dashboard\\n(API Keys → Create new key):",
+        default=c.get("api_key", ""),
     )
     if key is None:
         return  # cancelled
@@ -99,6 +101,7 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     url = _ask(
         "DREWQ Reader — Server URL",
         "WebSocket server URL\\n(e.g. wss://api.drewq.com/ws/reader or ws://localhost:8000/ws/reader):",
+        default=c.get("server_url", ""),
     )
     if not url:
         return  # cancelled or blank — don't save incomplete config
