@@ -1,15 +1,30 @@
 """
-Settings dialog for macOS using tkinter — auto-resize text input with Cmd+V support.
+Settings dialog for macOS.
+
+Uses tkinter (auto-resize text field) when available, otherwise falls back to
+native osascript dialogs. The osascript path works regardless of how Python was
+compiled — it was the original implementation and remains the safe default.
 """
 
-import tkinter as tk
+import os
+import subprocess
+import tempfile
 from typing import Callable, Optional
 
 import config as cfg
 
+# ── Tkinter availability check ────────────────────────────────────────────────
 
-def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
-    """Show a modal input dialog with an auto-resizing text field."""
+try:
+    import tkinter as tk
+    _HAS_TKINTER = True
+except ImportError:
+    _HAS_TKINTER = False
+
+
+# ── Tkinter dialog (auto-resize) ──────────────────────────────────────────────
+
+def _ask_tk(title: str, prompt: str, default: str = "") -> Optional[str]:
     result = [None]
     cancelled = [False]
 
@@ -29,7 +44,6 @@ def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
         padx=16, pady=12,
     ).pack(fill="x")
 
-    # Auto-resize Text widget
     frame = tk.Frame(dialog, padx=16, pady=0)
     frame.pack(fill="x")
 
@@ -52,7 +66,10 @@ def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
             lines = int(txt.index("end-1c").split(".")[0])
         txt.configure(height=max(2, min(lines, 6)))
         dialog.update_idletasks()
-        dialog.geometry(f"{w}x{dialog.winfo_reqheight()}+{(sw - w) // 2}+{(sh - dialog.winfo_reqheight()) // 2}")
+        dialog.geometry(
+            f"{w}x{dialog.winfo_reqheight()}"
+            f"+{(sw - w) // 2}+{(sh - dialog.winfo_reqheight()) // 2}"
+        )
 
     txt.bind("<KeyRelease>", _resize)
     _resize()
@@ -65,8 +82,7 @@ def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
         cancelled[0] = True
         dialog.destroy()
 
-    # Return submits; block the newline insertion
-    txt.bind("<Return>", lambda e: (on_ok(), "break")[1])
+    txt.bind("<Return>",   lambda e: (on_ok(), "break")[1])
     txt.bind("<KP_Enter>", lambda e: (on_ok(), "break")[1])
 
     btn_frame = tk.Frame(dialog)
@@ -85,10 +101,87 @@ def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
     return result[0]
 
 
+# ── osascript dialog (fallback) ───────────────────────────────────────────────
+
+_icns_path: str | None = None
+
+
+def _build_dialog_icon() -> str | None:
+    global _icns_path
+    if _icns_path and os.path.exists(_icns_path):
+        return _icns_path
+    try:
+        from PIL import Image, ImageDraw
+
+        def _make(size: int) -> Image.Image:
+            img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle(
+                [0, 0, size - 1, size - 1],
+                radius=max(4, size // 8),
+                fill="#000000",
+            )
+            cx, cy = size * 0.5, size * 0.54
+            lw = max(1, round(size / 20))
+            for frac in [0.10, 0.18, 0.26, 0.34, 0.42]:
+                r = size * frac
+                draw.arc([cx - r, cy - r, cx + r, cy + r],
+                         start=200, end=340, fill=(255, 255, 255, 255), width=lw)
+            return img
+
+        iconset = os.path.join(tempfile.gettempdir(), "drewq_icon.iconset")
+        os.makedirs(iconset, exist_ok=True)
+        for base in [16, 32, 128, 256, 512]:
+            _make(base).save(os.path.join(iconset, f"icon_{base}x{base}.png"))
+            _make(base * 2).save(os.path.join(iconset, f"icon_{base}x{base}@2x.png"))
+
+        icns = os.path.join(tempfile.gettempdir(), "drewq_icon.icns")
+        subprocess.run(
+            ["iconutil", "-c", "icns", iconset, "-o", icns],
+            check=True, capture_output=True,
+        )
+        _icns_path = icns
+        return icns
+    except Exception:
+        return None
+
+
+def _ask_osascript(title: str, prompt: str, default: str = "") -> Optional[str]:
+    icns = _build_dialog_icon()
+    icon_clause = f'with icon (POSIX file "{icns}")' if icns else "with icon note"
+    safe_default = default.replace('"', '\\"')
+    script = (
+        f'display dialog "{prompt}" '
+        f'default answer "{safe_default}" '
+        f'{icon_clause} '
+        f'buttons {{"Cancel", "OK"}} '
+        f'default button "OK" '
+        f'with title "{title}"'
+    )
+    result = subprocess.run(
+        ["/usr/bin/osascript", "-e", script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    for part in result.stdout.strip().split(", "):
+        if part.startswith("text returned:"):
+            return part[len("text returned:"):].strip()
+    return ""
+
+
+# ── Public interface ──────────────────────────────────────────────────────────
+
+def _ask(title: str, prompt: str, default: str = "") -> Optional[str]:
+    if _HAS_TKINTER:
+        return _ask_tk(title, prompt, default)
+    return _ask_osascript(title, prompt, default)
+
+
 def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     c = cfg.load()
 
-    # ── API Key ───────────────────────────────────────────────────────────────
     key = _ask(
         "DREWQ Reader — Settings",
         "Paste your API key from the DREWQ dashboard\n(API Keys → Create new key):",
@@ -97,7 +190,6 @@ def open_settings(on_save: Optional[Callable[[], None]] = None) -> None:
     if key is None:
         return  # cancelled
 
-    # ── Server URL ────────────────────────────────────────────────────────────
     url = _ask(
         "DREWQ Reader — Server URL",
         "WebSocket server URL\n(e.g. wss://api.drewq.com/ws/reader or ws://localhost:8000/ws/reader):",
